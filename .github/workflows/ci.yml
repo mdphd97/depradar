@@ -43,8 +43,16 @@ jobs:
         test -f test_graph.json
         python -c "import json; data=json.load(open('test_graph.json')); assert 'nodes' in data and 'links' in data; print('Valid graph JSON!')"
 
+    - name: Run Unit Tests
+      run: |
+        python -m unittest discover tests
+
     - name: Test AI Agent Queries & Stale Detection
       run: |
         depradar query python --json
         depradar stale --json
         depradar agent-context
+        depradar snapshot --save --label "ci-test"
+        depradar snapshot --list
+        depradar diff --since latest
+        depradar audit

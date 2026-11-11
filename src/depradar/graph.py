@@ -7,6 +7,7 @@ from .scanners.node_scanner import scan_node
 from .scanners.python_scanner import scan_python
 from .scanners.system_scanner import scan_system
 from .scanners.project_scanner import scan_projects
+from .scanners.build_scanner import scan_build_artifacts
 from .scanners.code_scanner import scan_code_imports
 
 def build_graph(home: Path = None) -> GraphData:
@@ -18,7 +19,7 @@ def build_graph(home: Path = None) -> GraphData:
     seen_node_ids = set()
 
     # Collect from standard scanners
-    scanners = [scan_node, scan_python, scan_system, scan_projects]
+    scanners = [scan_node, scan_python, scan_system, scan_projects, scan_build_artifacts]
     for scan_fn in scanners:
         nodes, links = scan_fn(home)
         for n in nodes:

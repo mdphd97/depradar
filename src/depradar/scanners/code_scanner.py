@@ -130,25 +130,40 @@ def extract_pyproject_deps(proj_dir: Path) -> Set[str]:
             pass
     return deps
 
+def is_valid_pkg_name(name: str) -> bool:
+    if not name or len(name) > 64 or any(c in name for c in [" ", "\n", "\r", "\t", "*", "?", ":", "<", ">", "|"]):
+        return False
+    return bool(re.match(r"^(@[a-zA-Z0-9_\-]+\/)?[a-zA-Z0-9_\-\.]+$", name))
+
 def extract_js_imports(file_path: Path) -> Set[str]:
     imports = set()
     try:
         content = file_path.read_text(encoding="utf-8", errors="ignore")
         # Match ES6 imports: from 'pkg' or from "pkg"
-        for m in re.finditer(r'from\s+[\'"]([^\'".\/][^\'"]*)[\'"]', content):
-            raw = m.group(1).split("/")[0]
-            if raw and not raw.startswith("@"):
-                imports.add(raw)
-            elif raw.startswith("@") and "/" in m.group(1):
-                # scoped package: @supabase/supabase-js
-                parts = m.group(1).split("/")
-                imports.add(f"{parts[0]}/{parts[1]}")
+        for m in re.finditer(r'from\s+[\'"]([@a-zA-Z0-9_\-\.\/]+)[\'"]', content):
+            spec = m.group(1).strip()
+            if spec.startswith((".", "/")):
+                continue
+            if spec.startswith("@") and "/" in spec:
+                parts = spec.split("/")
+                pkg = f"{parts[0]}/{parts[1]}"
+            else:
+                pkg = spec.split("/")[0]
+            if is_valid_pkg_name(pkg):
+                imports.add(pkg)
 
         # Match require('pkg')
-        for m in re.finditer(r'require\(\s*[\'"]([^\'".\/][^\'"]*)[\'"]\s*\)', content):
-            raw = m.group(1).split("/")[0]
-            if raw and not raw.startswith("@"):
-                imports.add(raw)
+        for m in re.finditer(r'require\(\s*[\'"]([@a-zA-Z0-9_\-\.\/]+)[\'"]\s*\)', content):
+            spec = m.group(1).strip()
+            if spec.startswith((".", "/")):
+                continue
+            if spec.startswith("@") and "/" in spec:
+                parts = spec.split("/")
+                pkg = f"{parts[0]}/{parts[1]}"
+            else:
+                pkg = spec.split("/")[0]
+            if is_valid_pkg_name(pkg):
+                imports.add(pkg)
     except Exception:
         pass
     return imports

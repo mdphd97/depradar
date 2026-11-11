@@ -1,6 +1,7 @@
 """Command-line interface for DepRadar.
 Supports interactive visualization, cross-platform execution (Linux, macOS, Windows),
-and AI Agent integrations (JSON output, query engine, stale package cleanup, and MCP server).
+AI Agent integrations (JSON output, query engine, stale package cleanup, and MCP server),
+Time-machine snapshots, environment diffs, and security audits.
 """
 
 import sys
@@ -9,22 +10,14 @@ import argparse
 import platform
 import webbrowser
 from pathlib import Path
+from .models import get_default_output_dir
 from .graph import build_graph
 from .generator import generate_html
 from .agent import generate_agent_context, query_dependencies, get_stale_items
 from .mcp import run_mcp_server
-
-def get_default_output_dir() -> Path:
-    """Returns cross-platform configuration and output directory."""
-    home = Path.home()
-    if platform.system() == "Windows":
-        appdata = Path(home / "AppData" / "Roaming")
-        return appdata / "depradar" if appdata.exists() else home / ".depradar"
-    elif platform.system() == "Darwin":
-        app_sup = home / "Library" / "Application Support"
-        return app_sup / "depradar" if app_sup.exists() else home / ".config" / "depradar"
-    else:
-        return home / ".config" / "depradar"
+from .diff import save_snapshot, list_snapshots, load_snapshot, compute_diff, format_diff_cli
+from .audit import audit_packages, format_audit_cli
+from .server import run_server
 
 DEFAULT_OUTPUT_DIR = get_default_output_dir()
 DEFAULT_HTML_PATH = DEFAULT_OUTPUT_DIR / "depradar_graph.html"
@@ -50,6 +43,28 @@ def main():
     # stale
     p_stale = subparsers.add_parser("stale", help="List stale, orphaned, and unused packages with cleanup commands")
     p_stale.add_argument("--json", action="store_true", help="Output machine-readable JSON for AI agents")
+
+    # snapshot
+    p_snap = subparsers.add_parser("snapshot", help="Save or list environment baseline snapshots")
+    p_snap.add_argument("--save", action="store_true", help="Save a new snapshot of current state")
+    p_snap.add_argument("--label", help="Optional human-readable label for the snapshot")
+    p_snap.add_argument("--list", action="store_true", help="List all saved snapshots")
+    p_snap.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
+    # diff
+    p_diff = subparsers.add_parser("diff", help="Calculate environment drift, package upgrades, and storage deltas")
+    p_diff.add_argument("--since", default="latest", help="Compare with snapshot ('latest', 'prev', or filename)")
+    p_diff.add_argument("--json", action="store_true", help="Output machine-readable JSON for AI agents")
+
+    # audit
+    p_audit = subparsers.add_parser("audit", help="Audit installed packages for security vulnerabilities and CVEs")
+    p_audit.add_argument("--online", action="store_true", help="Query online OSV database in addition to offline advisories")
+    p_audit.add_argument("--json", action="store_true", help="Output machine-readable JSON for AI agents")
+
+    # serve
+    p_serve = subparsers.add_parser("serve", help="Run local interactive web server with real-time pruning API")
+    p_serve.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")
+    p_serve.add_argument("--no-open", action="store_true", help="Do not automatically open browser")
 
     # agent-context
     p_ctx = subparsers.add_parser("agent-context", help="Export compact Markdown system context for AI agents")
@@ -94,6 +109,56 @@ def main():
         if getattr(args, "open", False):
             print("🌐 Opening in your web browser...")
             webbrowser.open(f"file://{out_file.resolve()}")
+
+    elif args.command == "snapshot":
+        if getattr(args, "list", False) or (not getattr(args, "save", False) and not getattr(args, "label", None)):
+            snaps = list_snapshots()
+            if getattr(args, "json", False):
+                print(json.dumps(snaps, indent=2))
+            else:
+                if not snaps:
+                    print("📸 No snapshots found yet. Run `depradar snapshot --save` to create your first baseline!")
+                    return
+                print(f"📸 Saved Environment Snapshots ({len(snaps)} total):\n")
+                for s in snaps:
+                    label_str = f" [{s['label']}]" if s['label'] else ""
+                    print(f"• {s['filename']}{label_str}")
+                    print(f"  Saved: {s['saved_at']} | Nodes: {s['total_nodes']} | Links: {s['total_links']} | Size: {s['file_size']}")
+                print("\nTip: Run `depradar diff --since latest` to compare current state.")
+        else:
+            graph = build_graph()
+            snap_path = save_snapshot(graph, label=args.label)
+            if getattr(args, "json", False):
+                print(json.dumps({"success": True, "path": str(snap_path)}, indent=2))
+            else:
+                print(f"✅ Saved snapshot baseline: {snap_path.name}")
+                print(f"   Stored at: {snap_path}")
+                print(f"   Total components tracked: {len(graph.nodes)} nodes, {len(graph.links)} links")
+
+    elif args.command == "diff":
+        old_snap = load_snapshot(args.since)
+        if not old_snap:
+            print(f"❌ Snapshot '{args.since}' not found. Run `depradar snapshot --save` to create a baseline.")
+            return
+
+        current_graph = build_graph().to_dict()
+        diff_res = compute_diff(old_snap, current_graph)
+
+        if getattr(args, "json", False):
+            print(json.dumps(diff_res, indent=2))
+        else:
+            print(format_diff_cli(diff_res))
+
+    elif args.command == "audit":
+        graph = build_graph()
+        audit_res = audit_packages(graph, online=getattr(args, "online", False))
+        if getattr(args, "json", False):
+            print(json.dumps(audit_res, indent=2))
+        else:
+            print(format_audit_cli(audit_res))
+
+    elif args.command == "serve":
+        run_server(port=args.port, open_browser=not getattr(args, "no_open", False))
 
     elif args.command == "query":
         graph = build_graph()

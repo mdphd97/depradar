@@ -101,19 +101,25 @@ pip install -e .
 
 ---
 
-### Usage
+### Usage & Command Suite
 
 ```bash
-# Scan your system and automatically launch the interactive graph in your default browser
+# 1. Scan your system and automatically launch the interactive graph in your browser
 depradar
 
-# Or explicitly run scan with flags
-depradar scan --open
+# 2. Run the interactive local daemon with real-time API endpoints
+depradar serve --port 8080
 
-# Save graph to a specific location
-depradar scan -o ~/Desktop/system_radar.html
+# 3. Time-Machine Snapshots & Environment Drift Diffing
+depradar snapshot --save --label "pre-upgrade"  # Save baseline snapshot
+depradar snapshot --list                         # List all captured snapshots
+depradar diff --since latest                     # Inspect package upgrades, removals & storage deltas
 
-# Export graph data as raw JSON for custom analysis
+# 4. Security & Vulnerability Auditing
+depradar audit                                  # Fast offline CVE and advisory audit
+depradar audit --online                         # Query OSV database for latest advisories
+
+# 5. Export graph data as raw JSON for custom analysis
 depradar export -o graph_data.json
 ```
 
@@ -136,11 +142,14 @@ Add DepRadar to your `claude_desktop_config.json` or `.cursor/mcp.json`:
 }
 ```
 
-#### Available MCP Tools:
+#### Available MCP Tools (7 Native Tools):
 * `depradar_get_system_overview`: High-level inventory of runtimes, disk sizes, and OS info.
 * `depradar_query_dependency`: Inquires which projects import a library and which runtime powers it.
 * `depradar_list_stale_dependencies`: Surfaces unreferenced or idle packages with cleanup commands.
 * `depradar_get_full_graph`: Emits complete dependency graph.
+* `depradar_audit_vulnerabilities`: Audits installed environment packages for known CVEs.
+* `depradar_save_snapshot`: Captures a baseline checkpoint before executing complex coding tasks.
+* `depradar_get_environment_diff`: Reports environment drift and temporary packages created by agents.
 
 ### 2. CLI for AI Subagents & Automation Scripts
 ```bash
@@ -149,6 +158,9 @@ depradar query selenium --json
 
 # List stale items and cleanup commands for automated maintenance
 depradar stale --json
+
+# Diff environment against a previous baseline
+depradar diff --since latest --json
 
 # Generate an LLM-optimized Markdown briefing for system prompts / CLAUDE.md
 depradar agent-context

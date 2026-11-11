@@ -577,6 +577,8 @@
       if (node.type === 'apt-suite') return '#FBBF24'; // Amber Gold for Docker & LaTeX
       if (node.type === 'python-venv' || node.type === 'uv-tool') return '#3B82F6'; // Royal Blue for Python venvs
       if (node.type === 'npm-global') return '#10B981'; // Emerald Green for global Node CLIs
+      if (node.type === 'build-artifact') return '#FB7185'; // Rose / Coral for project target/ & .next build artifacts
+      if (node.type === 'build-cache') return '#F43F5E'; // Deep Rose for global Gradle/Go/Maven caches
 
       // Code-imported packages: color by category ecosystem
       if (node.type === 'code-import') {

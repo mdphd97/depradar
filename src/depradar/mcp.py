@@ -61,6 +61,48 @@ def run_mcp_server():
                 "properties": {},
                 "required": []
             }
+        },
+        {
+            "name": "depradar_audit_vulnerabilities",
+            "description": "Audits all installed Python and Node packages for security advisories and known CVEs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "online": {
+                        "type": "boolean",
+                        "description": "Whether to query OSV API online in addition to offline advisories (default: false)"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "depradar_save_snapshot",
+            "description": "Saves an environment snapshot baseline before running risky tasks or builds.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "description": "Optional label (e.g. 'pre-experiment-build')"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "depradar_get_environment_diff",
+            "description": "Calculates package additions, removals, upgrades, and storage deltas since a previous snapshot.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "since": {
+                        "type": "string",
+                        "description": "Snapshot identifier ('latest', 'prev', or filename, default: 'latest')"
+                    }
+                },
+                "required": []
+            }
         }
     ]
 
@@ -176,6 +218,28 @@ def run_mcp_server():
 
                 elif tool_name == "depradar_get_full_graph":
                     result_text = json.dumps(graph.to_dict(), indent=2)
+
+                elif tool_name == "depradar_audit_vulnerabilities":
+                    from .audit import audit_packages
+                    online_check = bool(args.get("online", False))
+                    audit_res = audit_packages(graph, online=online_check)
+                    result_text = json.dumps(audit_res, indent=2)
+
+                elif tool_name == "depradar_save_snapshot":
+                    from .diff import save_snapshot
+                    label = args.get("label", "mcp-agent-task")
+                    snap_p = save_snapshot(graph, label=label)
+                    result_text = json.dumps({"success": True, "snapshot": str(snap_p), "label": label}, indent=2)
+
+                elif tool_name == "depradar_get_environment_diff":
+                    from .diff import load_snapshot, compute_diff
+                    since = args.get("since", "latest")
+                    old_s = load_snapshot(since)
+                    if not old_s:
+                        result_text = f"Snapshot '{since}' not found. Run depradar_save_snapshot first."
+                    else:
+                        d_res = compute_diff(old_s, graph.to_dict())
+                        result_text = json.dumps(d_res, indent=2)
 
                 else:
                     result_text = f"Unknown tool: {tool_name}"

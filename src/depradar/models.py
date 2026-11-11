@@ -2,6 +2,20 @@
 
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Any, Optional
+import platform
+from pathlib import Path
+
+def get_default_output_dir() -> Path:
+    """Returns cross-platform configuration and output directory."""
+    home = Path.home()
+    if platform.system() == "Windows":
+        appdata = Path(home / "AppData" / "Roaming")
+        return appdata / "depradar" if appdata.exists() else home / ".depradar"
+    elif platform.system() == "Darwin":
+        app_sup = home / "Library" / "Application Support"
+        return app_sup / "depradar" if app_sup.exists() else home / ".config" / "depradar"
+    else:
+        return home / ".config" / "depradar"
 
 @dataclass
 class Node:
