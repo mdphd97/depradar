@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DepRadar • Interactive System & Package Dependency Map</title>
+  <!-- D3.js and Force Graph Library -->
+  <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+  <script src="https://unpkg.com/force-graph@1.43.5/dist/force-graph.min.js"></script>
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: rgba(17, 24, 39, 0.75);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --primary: #38BDF8;
+      --active: #10B981;
+      --inactive: #F59E0B;
+      --stale: #EF4444;
+      --cat-ai: #8B5CF6;
+      --cat-ds: #38BDF8;
+      --cat-auto: #F59E0B;
+      --cat-web: #10B981;
+      --cat-desktop: #EC4899;
+      --cat-runtimes: #6B7280;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #graph-container {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    /* Top Nav Bar */
+    header {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 20px;
+      background: var(--surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+
+    .radar-pulse {
+      width: 12px;
+      height: 12px;
+      background: var(--primary);
+      border-radius: 50%;
+      box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      max-width: 380px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 8px 14px 8px 34px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.88rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-box input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+
+    .search-box svg {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 15px;
+      height: 15px;
+      fill: var(--text-muted);
+    }
+
+    .filters {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+    }
+
+    .filter-btn.active {
+      background: rgba(56, 189, 248, 0.18);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .filter-btn.stale-btn.active {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: var(--stale);
+      color: var(--stale);
+    }
+
+    .action-btns {
+      display: flex;
+      gap: 6px;
+    }
+
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: var(--primary);
+    }
+
+    /* Stats Pill at bottom left */
+    .stats-overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 10;
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      padding: 12px 18px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.8rem;
+      display: flex;
+      gap: 18px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-item .val {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .stat-item .lbl {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Legend Overlay at bottom center */
+    .legend-overlay {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.75rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* Inspector Side Drawer */
+    #drawer {
+      position: absolute;
+      top: 80px;
+      right: 20px;
+      bottom: 20px;
+      width: 380px;
+      background: rgba(13, 19, 32, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      z-index: 20;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transform: translateX(420px);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.6);
+      overflow-y: auto;
+    }
+
+    #drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .drawer-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #FFF;
+      line-height: 1.3;
+    }
+
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.4rem;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .close-btn:hover { color: #FFF; background: rgba(255, 255, 255, 0.1); }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-status-active { background: rgba(16, 185, 129, 0.2); color: var(--active); border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-status-inactive { background: rgba(245, 158, 11, 0.2); color: var(--inactive); border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-status-stale { background: rgba(239, 68, 68, 0.2); color: var(--stale); border: 1px solid rgba(239, 68, 68, 0.4); }
+    .badge-category { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid var(--border); }
+
+    .drawer-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .section-lbl {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .info-card {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+
+    .mono-code {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.78rem;
+      background: #050811;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #38BDF8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .copy-btn {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: var(--primary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.7rem;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .copy-btn:hover {
+      background: var(--primary);
+      color: #000;
+    }
+
+    .dep-pill-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .dep-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .dep-pill:hover {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: absolute;
+      top: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: #10B981;
+      color: #000;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 100;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header>
+    <div class="brand">
+      <div class="radar-pulse"></div>
+      <span>DepRadar</span>
+    </div>
+
+    <div class="search-box">
+      <svg viewBox="0 0 24 24"><path d="M10 18a7.952 7.952 0 0 0 4.897-1.688l4.396 4.396 1.414-1.414-4.396-4.396A7.952 7.952 0 0 0 18 10c0-4.411-3.589-8-8-8s-8 3.589-8 8 3.589 8 8 8zm0-14c3.309 0 6 2.691 6 6s-2.691 6-6 6-6-2.691-6-6 2.691-6 6-6z"/></svg>
+      <input type="text" id="searchInput" placeholder="Search tool, runtime, or package... (Press /)">
+    </div>
+
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn stale-btn" data-filter="stale">🔴 Stale Only</button>
+      <button class="filter-btn" data-filter="AI & Agents">AI Stack</button>
+      <button class="filter-btn" data-filter="Data Science & ML">Data Science</button>
+      <button class="filter-btn" data-filter="Automation & Scraping">Automation</button>
+      <button class="filter-btn" data-filter="Fullstack Web">Web Apps</button>
+      <button class="filter-btn" data-filter="Desktop & System">Desktop & System</button>
+    </div>
+
+    <div class="action-btns">
+      <button class="icon-btn" id="btnCenter" title="Center View">🎯</button>
+      <button class="icon-btn" id="btnFreeze" title="Toggle Physics Simulation">⏸️</button>
+    </div>
+  </header>
+
+  <!-- Canvas Container -->
+  <div id="graph-container"></div>
+
+  <!-- Bottom Left Stats -->
+  <div class="stats-overlay">
+    <div class="stat-item">
+      <span class="val" id="statNodes">0</span>
+      <span class="lbl">Nodes</span>
+    </div>
+    <div class="stat-item">
+      <span class="val" id="statLinks">0</span>
+      <span class="lbl">Connections</span>
+    </div>
+    <div class="stat-item">
+      <span class="val" id="statStale" style="color: var(--stale);">0</span>
+      <span class="lbl">Stale Items</span>
+    </div>
+  </div>
+
+  <!-- Bottom Center Legend -->
+  <div class="legend-overlay">
+    <div class="legend-item"><span class="dot" style="background: var(--active);"></span> Active (&lt;14d)</div>
+    <div class="legend-item"><span class="dot" style="background: var(--inactive);"></span> Inactive (14-30d)</div>
+    <div class="legend-item"><span class="dot" style="background: var(--stale);"></span> Stale (&gt;30d)</div>
+    <div class="legend-item" style="margin-left: 8px; border-left: 1px solid var(--border); padding-left: 12px;">⚪ Node Size = Disk Footprint</div>
+  </div>
+
+  <!-- Inspector Side Drawer -->
+  <div id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-title" id="dName">Package Name</div>
+      <button class="close-btn" id="btnCloseDrawer">&times;</button>
+    </div>
+
+    <div class="badge-row">
+      <span class="badge" id="dStatus">Active</span>
+      <span class="badge badge-category" id="dCategory">Category</span>
+      <span class="badge badge-category" id="dType">Type</span>
+    </div>
+
+    <div class="drawer-section">
+      <span class="section-lbl">Disk Footprint</span>
+      <div class="info-card" id="dSize" style="font-weight: 600; font-size: 1rem; color: #38BDF8;">-</div>
+    </div>
+
+    <div class="drawer-section">
+      <span class="section-lbl">Location / Path</span>
+      <div class="info-card" id="dPath" style="font-family: monospace; font-size: 0.75rem;">-</div>
+    </div>
+
+    <div class="drawer-section">
+      <span class="section-lbl">Last Activity</span>
+      <div class="info-card" id="dActivity">-</div>
+    </div>
+
+    <div class="drawer-section">
+      <span class="section-lbl">Notes & Purpose</span>
+      <div class="info-card" id="dNotes">-</div>
+    </div>
+
+    <!-- Cleanup Command (if available) -->
+    <div class="drawer-section" id="dCmdSection" style="display: none;">
+      <span class="section-lbl" style="color: var(--stale);">Recommended Cleanup Command</span>
+      <div class="mono-code">
+        <span id="dCmdText" style="overflow: hidden; text-overflow: ellipsis;">-</span>
+        <button class="copy-btn" id="btnCopyCmd">Copy</button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <span class="section-lbl">Upstream Dependencies (Required by this)</span>
+      <div class="dep-pill-list" id="dUpstream">
+        <span style="color: var(--text-muted); font-size: 0.78rem;">None</span>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <span class="section-lbl">Downstream Consumers (Requires this)</span>
+      <div class="dep-pill-list" id="dDownstream">
+        <span style="color: var(--text-muted); font-size: 0.78rem;">None</span>
+      </div>
+    </div>
+
+    <!-- Installed Packages Manifest (for Python venvs and UV tools) -->
+    <div class="drawer-section" id="dPkgsSection" style="display: none;">
+      <span class="section-lbl" id="dPkgsTitle">Installed Python Packages</span>
+      <div id="dPkgsList" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 200px; overflow-y: auto; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: 8px; padding: 10px;">
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast">Command copied to clipboard!</div>
+
+  <!-- Graph Injection -->
+  <script>
+    const RAW_GRAPH_DATA = /* __GRAPH_DATA__ */ { "nodes": [], "links": [], "metadata": {} };
+
+    // Palette mapping by Category
+    const CATEGORY_COLORS = {
+      'AI & Agents': '#A855F7',
+      'Data Science & ML': '#0284C7',
+      'Automation & Scraping': '#EA580C',
+      'Fullstack Web': '#059669',
+      'Desktop & System': '#DB2777'
+    };
+
+    // Distinct, vibrant node colors based on exact type and ecosystem
+    function getNodeColor(node) {
+      if (node.type === 'runtime') return '#F8FAFC'; // Bright Silver/White
+      if (node.type === 'project') return '#A855F7'; // Vivid Purple for user projects
+      if (node.type === 'standalone') return '#F97316'; // Vivid Orange for CPLEX & Antigravity IDE
+      if (node.type === 'snap-app') return '#EC4899'; // Hot Pink for Snap desktop apps
+      if (node.type === 'snap-runtime') return '#9333EA'; // Violet for Wine runtimes
+      if (node.type === 'apt-suite') return '#FBBF24'; // Amber Gold for Docker & LaTeX
+      if (node.type === 'python-venv' || node.type === 'uv-tool') return '#3B82F6'; // Royal Blue for Python venvs
+      if (node.type === 'npm-global') return '#10B981'; // Emerald Green for global Node CLIs
+
+      // Code-imported packages: color by category ecosystem
+      if (node.type === 'code-import') {
+        if (node.category === 'AI & Agents') return '#C084FC';
+        if (node.category === 'Data Science & ML') return '#38BDF8';
+        if (node.category === 'Automation & Scraping') return '#F59E0B';
+        if (node.category === 'Fullstack Web') return '#34D399';
+        return '#60A5FA';
+      }
+
+      return CATEGORY_COLORS[node.category] || '#94A3B8';
+    }
+
+    const STATUS_BORDER_COLORS = {
+      'active': '#10B981',   // Emerald Green Ring
+      'inactive': '#F59E0B', // Amber Yellow Ring
+      'stale': '#EF4444'     // Bright Red Ring
+    };
+
+    // Multi-Select Category Filters & State
+    const selectedCategories = new Set(['all']);
+    let isStaleOnly = false;
+    let searchQuery = '';
+    let selectedNode = null;
+    let hoverLink = null;
+    let isPhysicsFrozen = false;
+
+    // Outer Constellation Architecture: 5 distinct outer islands leaving the center open
+    const CATEGORY_CENTERS = {
+      'AI & Agents': { x: -880, y: -540 },
+      'Data Science & ML': { x: 880, y: -540 },
+      'Automation & Scraping': { x: -880, y: 540 },
+      'Desktop & System': { x: 880, y: 540 },
+      'Fullstack Web': { x: 0, y: 880 }
+    };
+
+    // Filter Logic supporting Multi-Selection
+    function getFilteredData() {
+      let filteredNodes = RAW_GRAPH_DATA.nodes.filter(n => {
+        if (isStaleOnly && n.status !== 'stale') return false;
+        if (!selectedCategories.has('all') && !selectedCategories.has(n.category)) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          return n.name.toLowerCase().includes(q) || n.notes.toLowerCase().includes(q) || n.path.toLowerCase().includes(q);
+        }
+        return true;
+      });
+
+      // Pre-seed node positions with generous separation around outer category centers
+      filteredNodes.forEach(n => {
+        if (n.x === undefined || n.y === undefined) {
+          const center = CATEGORY_CENTERS[n.category] || { x: 0, y: 0 };
+          n.x = center.x + (Math.random() - 0.5) * 280;
+          n.y = center.y + (Math.random() - 0.5) * 280;
+        }
+      });
+
+      const nodeIds = new Set(filteredNodes.map(n => n.id));
+      let filteredLinks = RAW_GRAPH_DATA.links.filter(l => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        return nodeIds.has(sId) && nodeIds.has(tId);
+      });
+
+      // Update bottom-left stats overlay dynamically
+      const statNodesEl = document.getElementById('statNodes');
+      const statLinksEl = document.getElementById('statLinks');
+      const statStaleEl = document.getElementById('statStale');
+      if (statNodesEl) statNodesEl.innerText = filteredNodes.length;
+      if (statLinksEl) statLinksEl.innerText = filteredLinks.length;
+      if (statStaleEl) {
+        const staleCount = filteredNodes.filter(n => n.status === 'stale').length;
+        statStaleEl.innerText = staleCount;
+      }
+
+      return { nodes: filteredNodes, links: filteredLinks };
+    }
+
+    // Safe helper for rounded rect
+    function drawPill(ctx, x, y, w, h, r) {
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+      }
+    }
+
+    // Initialize ForceGraph
+    const container = document.getElementById('graph-container');
+    const Graph = ForceGraph()(container)
+      .graphData(getFilteredData())
+      .backgroundColor('#090D16')
+      .nodeId('id')
+      .nodeVal('val')
+      .nodeLabel(node => `${node.name}\nSize: ${node.size_human}\nStatus: ${node.status}`)
+      .linkSource('source')
+      .linkTarget('target')
+      .linkDirectionalArrowLength(4.5)
+      .linkDirectionalArrowRelPos(0.95)
+      .linkDirectionalArrowColor(link => link === hoverLink ? '#38BDF8' : 'rgba(255, 255, 255, 0.35)')
+      .linkColor(link => link === hoverLink ? '#38BDF8' : 'rgba(255, 255, 255, 0.16)')
+      .linkWidth(link => link === hoverLink ? 3.0 : 1.2)
+      .linkLabel(link => {
+        const sName = typeof link.source === 'object' ? link.source.name : link.source;
+        const tName = typeof link.target === 'object' ? link.target.name : link.target;
+        const rel = link.relationship || 'Dependencies';
+        const desc = link.description || 'System dependency linkage';
+        return `
+          <div style="background: rgba(13, 19, 32, 0.96); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 8px; padding: 10px 14px; max-width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.7); font-family: 'Inter', sans-serif; pointer-events: none;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: #F8FAFC; font-size: 0.85rem;">${sName} &rarr; ${tName}</span>
+              <span style="font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; background: rgba(56, 189, 248, 0.15); color: #38BDF8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 6px; border-radius: 4px; font-weight: 600; white-space: nowrap;">${rel}</span>
+            </div>
+            <div style="font-size: 0.78rem; color: #CBD5E1; line-height: 1.45;">${desc}</div>
+          </div>
+        `;
+      })
+      .onLinkHover(link => {
+        hoverLink = link;
+        container.style.cursor = link ? 'pointer' : 'default';
+      })
+      .warmupTicks(90)        // Pre-compute 90 ticks in memory so graph appears settled instantly!
+      .cooldownTicks(70)      // Smooth rapid stabilization
+      .d3AlphaDecay(0.045)    // 2x faster cooling to stop lingering oscillations
+      .d3VelocityDecay(0.48)  // Critical damping friction: stops wobbling and bouncing
+      .d3Force('center', null) // Disable center gravity so outer categories stay on the perimeter!
+      .d3Force('charge', d3.forceManyBody().strength(node => -520 - (node.val || 1) * 35))
+      .d3Force('collide', d3.forceCollide(node => Math.max(40, Math.sqrt(node.val || 1) * 8 + 38)))
+      .d3Force('link', d3.forceLink().distance(d => {
+        const s = typeof d.source === 'object' ? d.source : null;
+        const t = typeof d.target === 'object' ? d.target : null;
+        if (s && t && s.category !== t.category) {
+          return 340; // Long radial link connecting central runtime to outer category
+        }
+        return 75; // Tight cohesive grouping within the category
+      }))
+      .d3Force('x', d3.forceX(d => (CATEGORY_CENTERS[d.category] ? CATEGORY_CENTERS[d.category].x : 0)).strength(0.24))
+      .d3Force('y', d3.forceY(d => (CATEGORY_CENTERS[d.category] ? CATEGORY_CENTERS[d.category].y : 0)).strength(0.24))
+      .onRenderFramePre((ctx, globalScale) => {
+        // --- 1. MACRO CLUSTER HEADINGS & BOUNDARIES (ZOOMED OUT) ---
+        // When zoomed out (globalScale < 0.9), display big prominent category banners over each island.
+        // As you zoom in, the banners smoothly dissolve so individual separated nodes take over.
+        if (globalScale > 1.2) return;
+
+        const clusterOpacity = Math.max(0, Math.min(1, (1.1 - globalScale) / 0.5));
+        if (clusterOpacity <= 0) return;
+
+        const clusters = {};
+        const curData = Graph.graphData();
+        if (!curData || !curData.nodes) return;
+
+        curData.nodes.forEach(node => {
+          if (node.x === undefined || node.y === undefined) return;
+          if (!clusters[node.category]) {
+            clusters[node.category] = {
+              minX: Infinity, maxX: -Infinity,
+              minY: Infinity, maxY: -Infinity,
+              nodes: []
+            };
+          }
+          const c = clusters[node.category];
+          c.nodes.push(node);
+          if (node.x < c.minX) c.minX = node.x;
+          if (node.x > c.maxX) c.maxX = node.x;
+          if (node.y < c.minY) c.minY = node.y;
+          if (node.y > c.maxY) c.maxY = node.y;
+        });
+
+        Object.entries(clusters).forEach(([category, c]) => {
+          if (c.nodes.length < 1) return;
+          const color = CATEGORY_COLORS[category] || '#94A3B8';
+          const padding = 50;
+          const width = Math.max(140, (c.maxX - c.minX) + padding * 2);
+          const height = Math.max(110, (c.maxY - c.minY) + padding * 2);
+          const cx = (c.minX + c.maxX) / 2;
+          const cy = (c.minY + c.maxY) / 2;
+          const x = cx - width / 2;
+          const y = cy - height / 2;
+
+          ctx.save();
+
+          // Glowing tinted cluster container bubble
+          drawPill(ctx, x, y, width, height, 28);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = clusterOpacity * 0.05;
+          ctx.fill();
+
+          // Dashed cluster boundary outline
+          ctx.globalAlpha = clusterOpacity * 0.35;
+          ctx.lineWidth = 2.0 / globalScale;
+          ctx.setLineDash([8 / globalScale, 8 / globalScale]);
+          ctx.strokeStyle = color;
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Big Prominent Category Heading Banner
+          const headingY = y - (18 / globalScale);
+          const headingFontSize = Math.max(16, Math.min(34, 22 / globalScale));
+          ctx.font = `800 ${headingFontSize}px 'Inter', sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+
+          const titleText = `${category.toUpperCase()} (${c.nodes.length} ITEMS)`;
+          const metrics = ctx.measureText(titleText);
+          const pillW = metrics.width + (28 / globalScale);
+          const pillH = headingFontSize + (14 / globalScale);
+
+          // Dark backing pill for banner
+          ctx.globalAlpha = clusterOpacity * 0.95;
+          drawPill(ctx, cx - pillW / 2, headingY - pillH + (4 / globalScale), pillW, pillH, 8);
+          ctx.fillStyle = '#090D16';
+          ctx.fill();
+
+          ctx.lineWidth = 1.5 / globalScale;
+          ctx.strokeStyle = color;
+          ctx.stroke();
+
+          // Title text
+          ctx.fillStyle = color;
+          ctx.fillText(titleText, cx, headingY);
+
+          ctx.restore();
+        });
+      })
+      .nodeCanvasObject((node, ctx, globalScale) => {
+        const baseRadius = Math.max(4.5, Math.sqrt(node.val || 1) * 3);
+        const nodeColor = getNodeColor(node);
+        const statusBorder = STATUS_BORDER_COLORS[node.status] || '#10B981';
+        const isSelected = selectedNode && selectedNode.id === node.id;
+
+        // 1. Draw Status Outer Ring (Sharp and clear, NOT a blurry muddy blob)
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, baseRadius + (isSelected ? 3.5 : 2), 0, 2 * Math.PI, false);
+        ctx.strokeStyle = isSelected ? '#FFFFFF' : statusBorder;
+        ctx.lineWidth = (isSelected ? 3 : 1.8) / globalScale;
+        ctx.stroke();
+
+        // 2. Draw Vivid Core Node
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, baseRadius, 0, 2 * Math.PI, false);
+        ctx.fillStyle = nodeColor;
+        ctx.fill();
+
+        // --- 3. ADAPTIVE SCREEN-PIXEL TYPOGRAPHY ---
+        // Guaranteed readable at any zoom level!
+        // When zoomed out (<0.5), only major anchor hubs show text to prevent crowding.
+        // As you zoom in (>=0.5), EVERY node label cleanly appears with dark backing pill!
+        const isMajorHub = node.val > 15;
+        const showLabel = isSelected || (globalScale >= 0.5) || (globalScale >= 0.3 && isMajorHub);
+
+        if (showLabel) {
+          const label = node.name;
+          
+          // Adaptive screen-pixel font size: strictly 11px to 16px on monitor!
+          const screenPx = Math.max(11, Math.min(16, 11 + Math.max(0, globalScale - 0.7) * 4));
+          const worldFontSize = screenPx / globalScale;
+
+          ctx.save();
+          ctx.font = `${isSelected ? '700' : '600'} ${worldFontSize}px 'Inter', sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+
+          const textY = node.y + baseRadius + (4 / globalScale);
+          const textMetrics = ctx.measureText(label);
+          const padX = 6 / globalScale;
+          const padY = 2 / globalScale;
+
+          // High-contrast dark backing pill behind label
+          drawPill(ctx, node.x - textMetrics.width / 2 - padX, textY - padY, textMetrics.width + padX * 2, worldFontSize + padY * 2, 4);
+          ctx.fillStyle = 'rgba(9, 13, 22, 0.92)';
+          ctx.fill();
+
+          if (isSelected) {
+            ctx.strokeStyle = '#38BDF8';
+            ctx.lineWidth = 1 / globalScale;
+            ctx.stroke();
+          }
+
+          // Primary Label Text
+          ctx.fillStyle = isSelected ? '#38BDF8' : (node.status === 'stale' ? '#FCA5A5' : '#F8FAFC');
+          ctx.fillText(label, node.x, textY);
+
+          // Deep Detail Level: Sub-label on deep zoom
+          if (globalScale > 1.2 || isSelected) {
+            const subLabel = node.size_human && node.size_human !== '-' ? `${node.size_human} • ${node.type}` : node.type;
+            const subScreenPx = Math.max(9, screenPx * 0.8);
+            const subWorldFontSize = subScreenPx / globalScale;
+            ctx.font = `400 ${subWorldFontSize}px 'Inter', sans-serif`;
+            const subY = textY + worldFontSize + (3 / globalScale);
+
+            const subMetrics = ctx.measureText(subLabel);
+            drawPill(ctx, node.x - subMetrics.width / 2 - padX, subY - padY, subMetrics.width + padX * 2, subWorldFontSize + padY * 2, 3);
+            ctx.fillStyle = 'rgba(9, 13, 22, 0.85)';
+            ctx.fill();
+
+            ctx.fillStyle = '#94A3B8';
+            ctx.fillText(subLabel, node.x, subY);
+          }
+
+          ctx.restore();
+        }
+      })
+      .onNodeClick(node => {
+        selectNode(node);
+      })
+      .onBackgroundClick(() => {
+        closeDrawer();
+      });
+
+    // Node Selection & Drawer Logic
+    function selectNode(node) {
+      selectedNode = node;
+      Graph.centerAt(node.x, node.y, 600);
+      Graph.zoom(1.8, 600);
+
+      // Populate Drawer
+      document.getElementById('dName').innerText = node.name;
+      document.getElementById('dCategory').innerText = node.category;
+      document.getElementById('dType').innerText = node.type;
+
+      const dStatus = document.getElementById('dStatus');
+      dStatus.className = `badge badge-status-${node.status}`;
+      dStatus.innerText = node.status.toUpperCase();
+
+      document.getElementById('dSize').innerText = node.size_human;
+      document.getElementById('dPath').innerText = node.path;
+      document.getElementById('dActivity').innerText = `${node.last_used} (${node.days_inactive} days ago)`;
+      document.getElementById('dNotes').innerText = node.notes || 'No description provided.';
+
+      // Cleanup command
+      const cmdSec = document.getElementById('dCmdSection');
+      if (node.uninstall_cmd) {
+        cmdSec.style.display = 'flex';
+        document.getElementById('dCmdText').innerText = node.uninstall_cmd;
+      } else {
+        cmdSec.style.display = 'none';
+      }
+
+      // Installed packages list (for venvs and UV tools)
+      const pkgsSec = document.getElementById('dPkgsSection');
+      const pkgsList = document.getElementById('dPkgsList');
+      if (node.installed_packages && node.installed_packages.length > 0) {
+        pkgsSec.style.display = 'flex';
+        document.getElementById('dPkgsTitle').innerText = `Installed Packages (${node.installed_packages.length})`;
+        pkgsList.innerHTML = '';
+        node.installed_packages.forEach(p => {
+          const pill = document.createElement('span');
+          pill.style.cssText = 'font-size: 0.72rem; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); color: #E2E8F0; font-family: "Fira Code", monospace;';
+          pill.innerText = `${p.name} v${p.version}`;
+          pkgsList.appendChild(pill);
+        });
+      } else {
+        pkgsSec.style.display = 'none';
+      }
+
+      // Upstream Dependencies (Nodes pointing to this, or that this requires)
+      const curLinks = RAW_GRAPH_DATA.links;
+      const upstream = [];
+      const downstream = [];
+
+      curLinks.forEach(l => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+
+        if (tId === node.id) {
+          const parent = RAW_GRAPH_DATA.nodes.find(n => n.id === sId);
+          if (parent) upstream.push({ node: parent, link: l });
+        }
+        if (sId === node.id) {
+          const child = RAW_GRAPH_DATA.nodes.find(n => n.id === tId);
+          if (child) downstream.push({ node: child, link: l });
+        }
+      });
+
+      renderDepList('dUpstream', upstream);
+      renderDepList('dDownstream', downstream);
+
+      document.getElementById('drawer').classList.add('open');
+    }
+
+    function renderDepList(elementId, items) {
+      const el = document.getElementById(elementId);
+      el.innerHTML = '';
+      if (!items || items.length === 0) {
+        el.innerHTML = '<span style="color: var(--text-muted); font-size: 0.78rem;">None detected</span>';
+        return;
+      }
+      items.forEach(({ node, link }) => {
+        const card = document.createElement('div');
+        card.className = 'dep-pill';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.alignItems = 'stretch';
+        card.style.gap = '4px';
+        card.style.padding = '8px 10px';
+
+        const headerRow = document.createElement('div');
+        headerRow.style.display = 'flex';
+        headerRow.style.justifyContent = 'space-between';
+        headerRow.style.alignItems = 'center';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.style.display = 'flex';
+        titleDiv.style.alignItems = 'center';
+        titleDiv.style.gap = '6px';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.style.fontWeight = '600';
+        nameSpan.style.color = '#F8FAFC';
+        nameSpan.innerText = node.name;
+
+        const relBadge = document.createElement('span');
+        relBadge.className = 'badge';
+        relBadge.style.fontSize = '0.65rem';
+        relBadge.style.padding = '2px 6px';
+        relBadge.style.background = 'rgba(56, 189, 248, 0.15)';
+        relBadge.style.color = '#38BDF8';
+        relBadge.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+        relBadge.innerText = link.relationship || 'DEPENDS ON';
+
+        titleDiv.appendChild(nameSpan);
+        titleDiv.appendChild(relBadge);
+
+        const sizeSpan = document.createElement('span');
+        sizeSpan.style.fontSize = '0.7rem';
+        sizeSpan.style.color = 'var(--text-muted)';
+        sizeSpan.innerText = node.size_human;
+
+        headerRow.appendChild(titleDiv);
+        headerRow.appendChild(sizeSpan);
+        card.appendChild(headerRow);
+
+        if (link.description) {
+          const descDiv = document.createElement('div');
+          descDiv.style.fontSize = '0.72rem';
+          descDiv.style.color = '#94A3B8';
+          descDiv.style.lineHeight = '1.35';
+          descDiv.style.marginTop = '2px';
+          descDiv.innerText = link.description;
+          card.appendChild(descDiv);
+        }
+
+        card.onclick = () => selectNode(node);
+        el.appendChild(card);
+      });
+    }
+
+    function closeDrawer() {
+      selectedNode = null;
+      document.getElementById('drawer').classList.remove('open');
+    }
+
+    document.getElementById('btnCloseDrawer').onclick = closeDrawer;
+
+    // Multi-Select Filter Buttons Handler
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const filterVal = btn.dataset.filter;
+        const allBtn = document.querySelector('.filter-btn[data-filter="all"]');
+        const staleBtn = document.querySelector('.filter-btn[data-filter="stale"]');
+
+        if (filterVal === 'all') {
+          // Reset to All categories
+          selectedCategories.clear();
+          selectedCategories.add('all');
+          document.querySelectorAll('.filter-btn').forEach(b => {
+            if (b.dataset.filter !== 'stale') b.classList.remove('active');
+          });
+          allBtn.classList.add('active');
+        } else if (filterVal === 'stale') {
+          // Toggle Stale Only independently
+          isStaleOnly = !isStaleOnly;
+          staleBtn.classList.toggle('active', isStaleOnly);
+        } else {
+          // Toggle individual Category in Multi-Select Set
+          if (selectedCategories.has('all')) {
+            selectedCategories.delete('all');
+            allBtn.classList.remove('active');
+          }
+
+          if (selectedCategories.has(filterVal)) {
+            selectedCategories.delete(filterVal);
+            btn.classList.remove('active');
+          } else {
+            selectedCategories.add(filterVal);
+            btn.classList.add('active');
+          }
+
+          // If all individual categories were toggled off, fallback to "all"
+          if (selectedCategories.size === 0) {
+            selectedCategories.add('all');
+            allBtn.classList.add('active');
+          }
+        }
+
+        Graph.graphData(getFilteredData());
+        setTimeout(() => Graph.zoomToFit(600, 60), 80);
+      };
+    });
+
+    // Search Input
+    const searchInput = document.getElementById('searchInput');
+    searchInput.oninput = (e) => {
+      searchQuery = e.target.value.trim();
+      Graph.graphData(getFilteredData());
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement !== searchInput) {
+        e.preventDefault();
+        searchInput.focus();
+      }
+      if (e.key === 'Escape') {
+        closeDrawer();
+      }
+    });
+
+    // Center & Freeze Buttons
+    document.getElementById('btnCenter').onclick = () => {
+      Graph.zoomToFit(600, 40);
+    };
+
+    const btnFreeze = document.getElementById('btnFreeze');
+    btnFreeze.onclick = () => {
+      isPhysicsFrozen = !isPhysicsFrozen;
+      if (isPhysicsFrozen) {
+        Graph.pauseAnimation();
+        btnFreeze.innerText = '▶️';
+        btnFreeze.title = 'Resume Physics';
+      } else {
+        Graph.resumeAnimation();
+        btnFreeze.innerText = '⏸️';
+        btnFreeze.title = 'Pause Physics';
+      }
+    };
+
+    // Copy Command Toast
+    document.getElementById('btnCopyCmd').onclick = () => {
+      const text = document.getElementById('dCmdText').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const toast = document.getElementById('toast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2200);
+      });
+    };
+
+    // Auto-fit after stabilization
+    setTimeout(() => {
+      Graph.zoomToFit(800, 50);
+    }, 1200);
+  </script>
+</body>
+</html>

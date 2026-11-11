@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "depradar"
+version = "0.1.0"
+description = "Interactive System & Package Dependency Radar with force-directed graph & AI agent MCP server"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "mdphd97", email = "mdphd97@users.noreply.github.com" }
+]
+requires-python = ">=3.9"
+dependencies = []
+keywords = [
+    "dependency-graph",
+    "visualization",
+    "developer-tools",
+    "mcp-server",
+    "virtualenv",
+    "disk-usage",
+    "ai-agents"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Homepage = "https://github.com/mdphd97/depradar"
+Documentation = "https://mdphd97.github.io/depradar/"
+Repository = "https://github.com/mdphd97/depradar.git"
+Issues = "https://github.com/mdphd97/depradar/issues"
+
+[project.scripts]
+depradar = "depradar.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/depradar"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/depradar",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
