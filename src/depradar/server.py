@@ -10,7 +10,7 @@ import platform
 import webbrowser
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from .graph import build_graph
 from .generator import generate_html

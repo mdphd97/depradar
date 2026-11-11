@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "depradar"
-version = "0.2.0"
+version = "0.2.1"
 description = "Interactive System & Package Dependency Radar with force-directed graph & AI agent MCP server"
 readme = "README.md"
 license = { text = "MIT" }
