@@ -99,5 +99,34 @@ class TestDepRadarCore(unittest.TestCase):
         self.assertEqual(findings["total_vulnerabilities_found"], 1)
         self.assertEqual(findings["findings"][0]["cve"], "CVE-2024-22195")
 
+    def test_mcp_server(self):
+        import io
+        import json
+        from unittest.mock import patch
+        from depradar.mcp import run_mcp_server
+
+        input_data = "\n".join([
+            json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}),
+            json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+            json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "depradar_get_system_overview", "arguments": {}}}),
+            json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "depradar_audit_vulnerabilities", "arguments": {"online": False}}}),
+            json.dumps({"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "depradar_list_stale_dependencies", "arguments": {}}}),
+            ""
+        ])
+        output_buffer = io.StringIO()
+        with patch("sys.stdin", io.StringIO(input_data)), patch("sys.stdout", output_buffer):
+            run_mcp_server()
+
+        lines = [line for line in output_buffer.getvalue().splitlines() if line.strip()]
+        self.assertEqual(len(lines), 5)
+        resp1 = json.loads(lines[0])
+        self.assertEqual(resp1["id"], 1)
+        self.assertIn("capabilities", resp1["result"])
+
+        resp2 = json.loads(lines[1])
+        tool_names = [t["name"] for t in resp2["result"]["tools"]]
+        self.assertIn("depradar_get_system_overview", tool_names)
+        self.assertIn("depradar_audit_vulnerabilities", tool_names)
+
 if __name__ == "__main__":
     unittest.main()

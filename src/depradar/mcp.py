@@ -7,6 +7,7 @@ import json
 import platform
 from pathlib import Path
 from typing import Dict, Any, List
+from . import __version__
 from .graph import build_graph
 
 def run_mcp_server():
@@ -131,7 +132,7 @@ def run_mcp_server():
                         },
                         "serverInfo": {
                             "name": "depradar",
-                            "version": "0.1.0"
+                            "version": __version__
                         }
                     }
                 }
@@ -221,19 +222,19 @@ def run_mcp_server():
 
                 elif tool_name == "depradar_audit_vulnerabilities":
                     from .audit import audit_packages
-                    online_check = bool(args.get("online", False))
+                    online_check = bool(tool_args.get("online", False))
                     audit_res = audit_packages(graph, online=online_check)
                     result_text = json.dumps(audit_res, indent=2)
 
                 elif tool_name == "depradar_save_snapshot":
                     from .diff import save_snapshot
-                    label = args.get("label", "mcp-agent-task")
+                    label = tool_args.get("label", "mcp-agent-task")
                     snap_p = save_snapshot(graph, label=label)
                     result_text = json.dumps({"success": True, "snapshot": str(snap_p), "label": label}, indent=2)
 
                 elif tool_name == "depradar_get_environment_diff":
                     from .diff import load_snapshot, compute_diff
-                    since = args.get("since", "latest")
+                    since = tool_args.get("since", "latest")
                     old_s = load_snapshot(since)
                     if not old_s:
                         result_text = f"Snapshot '{since}' not found. Run depradar_save_snapshot first."
